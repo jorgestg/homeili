@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Homeili/Homeili.csproj" />
+  <Project Path="Tests/Tests.csproj" />
+</Solution>
