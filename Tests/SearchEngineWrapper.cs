@@ -1,21 +1,15 @@
-using System.Text;
 using Homeili;
 
 namespace Tests;
 
 public sealed class SearchEngine
 {
-    private readonly Trie _trie = new();
+    private readonly Fst _fst = new();
 
-    public void Insert(string word) => _trie.Insert(Encoding.UTF8.GetBytes(word));
+    public void Insert(string word) => _fst.Insert(word);
 
-    public bool Contains(string word) => _trie.Contains(Encoding.UTF8.GetBytes(word));
+    public bool Contains(string word) => _fst.Contains(word);
 
-    public IReadOnlyList<string> PrefixSearch(string word) =>
-        [
-            .. _trie
-                .PrefixSearch(Encoding.UTF8.GetBytes(word))
-                .Select(node => node.Word!)
-                .OrderBy(word => word, StringComparer.Ordinal),
-        ];
+    public IReadOnlyList<string> PrefixSearch(string prefix, int limit = 10) =>
+        _fst.PrefixSearch(prefix, limit);
 }

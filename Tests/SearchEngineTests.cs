@@ -79,6 +79,16 @@ public sealed class SearchEngineTests
         Assert.False(engine.Contains("ca"));
     }
 
+    [Fact]
+    public void Insert_MinimizationDoesNotShareState()
+    {
+        SearchEngine engine = Indexed("at", "bat");
+        Assert.True(engine.Contains("at"));
+
+        engine.Insert("ax");
+        Assert.False(engine.Contains("bax"));
+    }
+
     /// <summary>Insertion order does not matter when words are prefixes of each other.</summary>
     [Theory]
     [InlineData("cats,cat")]
@@ -168,7 +178,7 @@ public sealed class SearchEngineTests
                 words
                     .Where(word => word.StartsWith(probe, StringComparison.Ordinal))
                     .OrderBy(word => word, StringComparer.Ordinal),
-                engine.PrefixSearch(probe)
+                engine.PrefixSearch(probe, limit: words.Count)
             );
         }
     }

@@ -1,8 +1,14 @@
 # Homeili
-The idea is to learn how a search engine works, learning from Meilisearch internals.
-Also, make use of AI for writing validation tests, NOT the implementation.
+
+Project to learn how search engines work, by implementing Meilisearch internals.
+Also, make use of AI for writing tests -and possibly tooling- but NOT the implementation itself.
+
+## Playground
+
+`dotnet run Playground.cs`
 
 ## Stuff to learn
+
 - Inverted index
 - FSTs for dictionaries
 - Roaring bitmaps
@@ -15,11 +21,16 @@ Also, make use of AI for writing validation tests, NOT the implementation.
     6. Exact match
 - Filtering
 - Faceting
+- Storage mechanisms
 
 ## Learning path
 
 - [x] Trie
-- [ ] Radix Tree
-- [ ] Minimized DAG
+- [x] DFA
 - [ ] FST
 - [ ] Damas-Levenshtein
+- [ ] Roaring bitmaps
+
+## Sources
+
+- [What is full-text search and how does it work? - Meilisearch Blog](https://www.meilisearch.com/blog/how-full-text-search-engines-work)
