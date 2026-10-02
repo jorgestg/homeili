@@ -9,7 +9,9 @@ public interface IState
 }
 
 public sealed class ImmutableState(bool isTerminal, ImmutableArray<ImmutableTransition> transitions)
-    : IState, IComparable<ImmutableState>, IEquatable<ImmutableState>
+    : IState,
+        IComparable<ImmutableState>,
+        IEquatable<ImmutableState>
 {
     public ImmutableState()
         : this(false, []) { }
@@ -48,14 +50,6 @@ public sealed class MutableState : IState, IComparable<MutableState>, IEquatable
     public SortedSet<MutableTransition> Transitions { get; }
 
     IEnumerable<ITransition> IState.Transitions => Transitions.Cast<ITransition>();
-
-    public ImmutableState ToImmutable()
-    {
-        return new ImmutableState(
-            IsTerminal,
-            [.. Transitions.Select(transition => transition.ToImmutable())]
-        );
-    }
 
     public int CompareTo(MutableState? other) => StateComparer.Instance.Compare(this, other);
 

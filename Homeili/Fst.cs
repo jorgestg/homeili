@@ -1,4 +1,5 @@
 using System.CodeDom.Compiler;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Homeili;
@@ -75,7 +76,12 @@ public sealed class Fst
         CollectRecursively((ImmutableState)closest, path, hits, limit);
         return hits;
 
-        static void CollectRecursively(ImmutableState parent, List<char> path, List<string> hits, int limit)
+        static void CollectRecursively(
+            ImmutableState parent,
+            List<char> path,
+            List<string> hits,
+            int limit
+        )
         {
             foreach (ImmutableTransition child in parent.Transitions)
             {
@@ -99,7 +105,7 @@ public sealed class Fst
             return;
 
         MutableState newRoot = MinimizeRecursively(_mutableRoot, registry: []);
-        _root = newRoot.ToImmutable();
+        _root = FreezeRecursively(newRoot, registry: []);
         _mutableRoot = null;
 
         Dirty = false;
@@ -114,6 +120,26 @@ public sealed class Fst
 
             registry.Add(state);
             return state;
+        }
+
+        static ImmutableState FreezeRecursively(
+            MutableState mutable,
+            Dictionary<MutableState, ImmutableState> registry
+        )
+        {
+            if (registry.TryGetValue(mutable, out ImmutableState existing))
+                return existing;
+
+            var builder = ImmutableArray.CreateBuilder<ImmutableTransition>(mutable.Transitions.Count);
+            foreach (MutableTransition t in mutable.Transitions)
+            {
+                ImmutableState frozenState = FreezeRecursively(t.Target, registry);
+                builder.Add(new ImmutableTransition(t.Label, frozenState));
+            }
+
+            ImmutableState immutable = new(mutable.IsTerminal, builder.MoveToImmutable());
+            registry.Add(mutable, immutable);
+            return immutable;
         }
     }
 

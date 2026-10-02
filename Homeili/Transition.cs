@@ -8,17 +8,21 @@ public interface ITransition
     IState Target { get; }
 }
 
-public sealed class ImmutableTransition(char label, ImmutableState? target = null) 
-    : ITransition, IComparable<ImmutableTransition>, IEquatable<ImmutableTransition>
+public sealed class ImmutableTransition(char label, ImmutableState? target = null)
+    : ITransition,
+        IComparable<ImmutableTransition>,
+        IEquatable<ImmutableTransition>
 {
     public char Label { get; } = label;
     public ImmutableState Target { get; } = target ?? new();
 
     IState ITransition.Target => Target;
 
-    public int CompareTo(ImmutableTransition? other) => TransitionComparer.Instance.Compare(this, other);
+    public int CompareTo(ImmutableTransition? other) =>
+        TransitionComparer.Instance.Compare(this, other);
 
-    public bool Equals(ImmutableTransition? other) => TransitionComparer.Instance.Equals(this, other);
+    public bool Equals(ImmutableTransition? other) =>
+        TransitionComparer.Instance.Equals(this, other);
 
     public override bool Equals(object? obj) => Equals(obj as ImmutableTransition);
 
@@ -28,7 +32,9 @@ public sealed class ImmutableTransition(char label, ImmutableState? target = nul
 }
 
 public sealed class MutableTransition(char label, MutableState target)
-    : ITransition, IComparable<MutableTransition>, IEquatable<MutableTransition>
+    : ITransition,
+        IComparable<MutableTransition>,
+        IEquatable<MutableTransition>
 {
     public MutableTransition(ImmutableTransition original)
         : this(original.Label, new MutableState(original.Target)) { }
@@ -38,9 +44,8 @@ public sealed class MutableTransition(char label, MutableState target)
 
     IState ITransition.Target => Target;
 
-    public ImmutableTransition ToImmutable() => new(Label, Target.ToImmutable());
-
-    public int CompareTo(MutableTransition? other) => TransitionComparer.Instance.Compare(this, other);
+    public int CompareTo(MutableTransition? other) =>
+        TransitionComparer.Instance.Compare(this, other);
 
     public bool Equals(MutableTransition? other) => TransitionComparer.Instance.Equals(this, other);
 
