@@ -22,8 +22,6 @@ public sealed class SearchEngineTests
     [InlineData("cat")]
     [InlineData("a")]
     [InlineData("café")]
-    [InlineData("日本")]
-    [InlineData("🦀")]
     public void Contains_IsTrueForInsertedWord(string word) =>
         Assert.True(Indexed(word).Contains(word));
 
@@ -50,6 +48,20 @@ public sealed class SearchEngineTests
         Assert.False(engine.Contains("catsx"));
     }
 
+    /// <summary>Latin case and diacritics are ignored for lookup and prefix search.</summary>
+    [Fact]
+    public void Search_NormalizesAsciiCaseAndLatinDiacritics()
+    {
+        SearchEngine engine = Indexed("CAFÉ", "NAÏVE", "MiXeD");
+
+        Assert.True(engine.Contains("cafe"));
+        Assert.True(engine.Contains("naive"));
+        Assert.True(engine.Contains("cafe\u0301"));
+        Assert.True(engine.Contains("MIXED"));
+        Assert.Equal(["CAFÉ"], engine.PrefixSearch("CAFE").ToArray());
+        Assert.Equal(["NAÏVE"], engine.PrefixSearch("nai").ToArray());
+    }
+
     /// <summary>Re-inserting a word changes nothing, single-byte words included.</summary>
     [Fact]
     public void Insert_RepeatedWord_IsIdempotent()
@@ -58,8 +70,8 @@ public sealed class SearchEngineTests
 
         Assert.True(engine.Contains("cat"));
         Assert.True(engine.Contains("a"));
-        Assert.Equal(["cat"], engine.PrefixSearch("cat"));
-        Assert.Equal(["a"], engine.PrefixSearch("a"));
+        Assert.Equal(["cat"], engine.PrefixSearch("cat").ToArray());
+        Assert.Equal(["a"], engine.PrefixSearch("a").ToArray());
     }
 
     /// <summary>Insertion order does not change what the engine finds.</summary>
@@ -75,7 +87,7 @@ public sealed class SearchEngineTests
         foreach (string word in words)
             Assert.True(engine.Contains(word));
 
-        Assert.Equal(["cat"], engine.PrefixSearch("c"));
+        Assert.Equal(["cat"], engine.PrefixSearch("c").ToArray());
         Assert.False(engine.Contains("ca"));
     }
 
@@ -125,8 +137,8 @@ public sealed class SearchEngineTests
     {
         SearchEngine engine = Indexed("c", "cat");
 
-        Assert.Equal(["cat"], engine.PrefixSearch("ca"));
-        Assert.Equal(["c", "cat"], engine.PrefixSearch("c"));
+        Assert.Equal(["cat"], engine.PrefixSearch("ca").ToArray());
+        Assert.Equal(["c", "cat"], engine.PrefixSearch("c").ToArray());
     }
 
     /// <summary>Nested words appear once each, not once per level.</summary>
@@ -135,7 +147,7 @@ public sealed class SearchEngineTests
     {
         SearchEngine engine = Indexed("a", "ab", "abc");
 
-        Assert.Equal(["a", "ab", "abc"], engine.PrefixSearch("a"));
+        Assert.Equal(["a", "ab", "abc"], engine.PrefixSearch("a").ToArray());
     }
 
     /// <summary>Absent leading byte, dead end, or an over-long prefix yields no matches.</summary>
@@ -155,8 +167,8 @@ public sealed class SearchEngineTests
     {
         SearchEngine engine = Indexed("café", "cafard");
 
-        Assert.Equal(["cafard", "café"], engine.PrefixSearch("caf"));
-        Assert.Equal(["café"], engine.PrefixSearch("café"));
+        Assert.Equal(["cafard", "café"], engine.PrefixSearch("caf").ToArray());
+        Assert.Equal(["café"], engine.PrefixSearch("café").ToArray());
     }
 
     /// <summary>A randomized corpus agrees with a HashSet oracle for both lookups.</summary>

@@ -12,19 +12,19 @@ public sealed class Fst
     [MemberNotNullWhen(true, nameof(_mutableRoot))]
     private bool Dirty { get; set; }
 
-    public void Insert(string term)
+    public void Insert(ReadOnlySpan<byte> term, int output)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(term);
-
-        term = term.Trim();
+        ArgumentOutOfRangeException.ThrowIfLessThan(output, term.Length);
 
         _mutableRoot ??= new(_root);
-        if (Search(_mutableRoot, term, out IState closest, out ReadOnlySpan<char> unmatched))
+
+        SearchResult searchResult = Search(_mutableRoot, term);
+        if (searchResult.IsExactMatch)
         {
-            if (!closest.IsTerminal)
+            if (!searchResult.ExactState.IsTerminal)
             {
                 Dirty = true;
-                ((MutableState)closest).IsTerminal = true;
+                ((MutableState)searchResult.ExactState).IsTerminal = true;
             }
 
             return;
@@ -32,54 +32,56 @@ public sealed class Fst
 
         Dirty = true;
 
-        MutableState mutableClosest = (MutableState)closest;
-        foreach (char label in unmatched)
+        MutableState state = (MutableState)searchResult.ClosestState;
+        MutableTransition transition = null!;
+        int outputPerTransition = (int)
+            Math.Floor((double)output / searchResult.UnmatchedSuffix.Length);
+
+        foreach (byte label in searchResult.UnmatchedSuffix)
         {
-            MutableTransition t = new(label, new MutableState());
-            mutableClosest.Transitions.Add(t);
-            mutableClosest = t.Target;
+            transition = new(label, new MutableState(), outputPerTransition);
+            state.Transitions.Add(transition);
+            state = transition.Target;
         }
 
-        mutableClosest.IsTerminal = true;
+        state.IsTerminal = true;
+        if (outputPerTransition % output != 0)
+            transition.Output += output % outputPerTransition;
     }
 
-    public bool Contains(string term)
+    public bool Contains(ReadOnlySpan<byte> term)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(term);
-
         Minimize();
 
-        term = term.Trim();
-        if (Search(_root, term, out IState closest, out ReadOnlySpan<char> _))
-            return closest.IsTerminal;
+        SearchResult searchResult = Search(_root, term);
+        if (searchResult.IsExactMatch)
+            return searchResult.ExactState.IsTerminal;
 
         return false;
     }
 
-    public List<string> PrefixSearch(string prefix, int limit)
+    public List<int> PrefixSearch(ReadOnlySpan<byte> prefix, int limit)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
 
         Minimize();
 
-        List<string> hits = [];
-        prefix = prefix.Trim();
-        if (!Search(_root, prefix, out IState closest, out _))
+        List<int> hits = [];
+        SearchResult searchResult = Search(_root, prefix);
+        if (!searchResult.IsExactMatch)
             return hits;
 
-        List<char> path = [];
-        path.AddRange(prefix);
-        if (closest.IsTerminal)
-            hits.Add(prefix);
+        int path = 0;
+        if (searchResult.ExactState.IsTerminal)
+            hits.Add(searchResult.AccumulatedOutput);
 
-        CollectRecursively((ImmutableState)closest, path, hits, limit);
+        CollectTerminalsRecursively((ImmutableState)searchResult.ExactState, path, hits, limit);
         return hits;
 
-        static void CollectRecursively(
+        static void CollectTerminalsRecursively(
             ImmutableState parent,
-            List<char> path,
-            List<string> hits,
+            int outputAccumulator,
+            List<int> hits,
             int limit
         )
         {
@@ -88,13 +90,13 @@ public sealed class Fst
                 if (hits.Count == limit)
                     return;
 
-                path.Add(child.Label);
+                outputAccumulator += child.Output;
 
                 if (child.Target.IsTerminal)
-                    hits.Add(string.Join(string.Empty, path));
+                    hits.Add(outputAccumulator);
 
-                CollectRecursively(child.Target, path, hits, limit);
-                path.RemoveAt(path.Count - 1);
+                CollectTerminalsRecursively(child.Target, outputAccumulator, hits, limit);
+                outputAccumulator -= child.Output;
             }
         }
     }
@@ -123,46 +125,78 @@ public sealed class Fst
         }
 
         static ImmutableState FreezeRecursively(
-            MutableState mutable,
+            MutableState mutableState,
             Dictionary<MutableState, ImmutableState> registry
         )
         {
-            if (registry.TryGetValue(mutable, out ImmutableState existing))
+            if (registry.TryGetValue(mutableState, out ImmutableState? existing))
                 return existing;
 
-            var builder = ImmutableArray.CreateBuilder<ImmutableTransition>(mutable.Transitions.Count);
-            foreach (MutableTransition t in mutable.Transitions)
+            var transitions = ImmutableArray.CreateBuilder<ImmutableTransition>(
+                mutableState.Transitions.Count
+            );
+
+            foreach (MutableTransition t in mutableState.Transitions)
             {
                 ImmutableState frozenState = FreezeRecursively(t.Target, registry);
-                builder.Add(new ImmutableTransition(t.Label, frozenState));
+                transitions.Add(new ImmutableTransition(t.Label, frozenState, t.Output));
             }
 
-            ImmutableState immutable = new(mutable.IsTerminal, builder.MoveToImmutable());
-            registry.Add(mutable, immutable);
-            return immutable;
+            ImmutableState immutableState = new(mutableState.IsTerminal, transitions.MoveToImmutable());
+            registry.Add(mutableState, immutableState);
+            return immutableState;
         }
     }
 
-    private static bool Search(
-        IState root,
-        ReadOnlySpan<char> term,
-        out IState closest,
-        out ReadOnlySpan<char> unmatched
-    )
+    private readonly ref struct SearchResult
     {
-        closest = root;
-        unmatched = term;
-        foreach (char label in term)
-        {
-            ITransition? t = closest.Transitions.FirstOrDefault(t => t.Label == label);
-            if (t == null)
-                return false;
+        [MemberNotNullWhen(true, nameof(ExactTransition))]
+        [MemberNotNullWhen(true, nameof(ExactState))]
+        [MemberNotNullWhen(false, nameof(ClosestState))]
+        public bool IsExactMatch { get; init; }
 
-            closest = t.Target;
-            unmatched = unmatched.Slice(1);
+        public IState? ExactState { get; init; }
+        public ITransition? ExactTransition { get; init; }
+
+        public IState? ClosestState { get; init; }
+        public required int AccumulatedOutput { get; init; }
+        public required ReadOnlySpan<byte> UnmatchedSuffix { get; init; }
+    }
+
+    private static SearchResult Search(IState root, ReadOnlySpan<byte> term)
+    {
+        IState closestState = root;
+        ITransition? exactTransition = null;
+        int accumulatedOutput = 0;
+        ReadOnlySpan<byte> unmatchedSuffix = term;
+
+        foreach (byte label in term)
+        {
+            exactTransition = closestState.Transitions.FirstOrDefault(t => t.Label == label);
+            if (exactTransition == null)
+            {
+                return new SearchResult
+                {
+                    IsExactMatch = false,
+                    ClosestState = closestState,
+                    AccumulatedOutput = accumulatedOutput,
+                    UnmatchedSuffix = unmatchedSuffix,
+                };
+            }
+
+            closestState = exactTransition.Target;
+            accumulatedOutput += exactTransition.Output;
+            unmatchedSuffix = unmatchedSuffix[1..];
         }
 
-        return true;
+        return new SearchResult
+        {
+            IsExactMatch = true,
+            ExactState = closestState,
+            ExactTransition = exactTransition,
+            AccumulatedOutput = accumulatedOutput,
+            UnmatchedSuffix = unmatchedSuffix,
+        };
     }
 
     public override string ToString()

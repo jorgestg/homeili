@@ -3,9 +3,9 @@
 Project to learn how search engines work, by implementing Meilisearch internals.
 Also, make use of AI for writing tests -and possibly tooling- but NOT the implementation itself.
 
-## Playground
+## Tokenization
 
-`dotnet run Playground.cs`
+Tokenization does lowercasing + removing diactrics. Latin script only.
 
 ## Stuff to learn
 
@@ -27,7 +27,7 @@ Also, make use of AI for writing tests -and possibly tooling- but NOT the implem
 
 - [x] Trie
 - [x] DFA
-- [ ] FST
+- [-] FST
 - [ ] Damas-Levenshtein
 - [ ] Roaring bitmaps
 

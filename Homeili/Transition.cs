@@ -4,17 +4,22 @@ namespace Homeili;
 
 public interface ITransition
 {
-    char Label { get; }
+    byte Label { get; }
     IState Target { get; }
+    int Output { get; }
 }
 
-public sealed class ImmutableTransition(char label, ImmutableState? target = null)
+public sealed class ImmutableTransition(byte label, ImmutableState target, int output)
     : ITransition,
         IComparable<ImmutableTransition>,
         IEquatable<ImmutableTransition>
 {
-    public char Label { get; } = label;
-    public ImmutableState Target { get; } = target ?? new();
+    public ImmutableTransition(byte label, int output)
+        : this(label, new ImmutableState(), output) { }
+
+    public byte Label { get; } = label;
+    public ImmutableState Target { get; } = target;
+    public int Output { get; } = output;
 
     IState ITransition.Target => Target;
 
@@ -31,15 +36,16 @@ public sealed class ImmutableTransition(char label, ImmutableState? target = nul
     public override string ToString() => $"-> {Label}";
 }
 
-public sealed class MutableTransition(char label, MutableState target)
+public sealed class MutableTransition(byte label, MutableState target, int output)
     : ITransition,
         IComparable<MutableTransition>,
         IEquatable<MutableTransition>
 {
     public MutableTransition(ImmutableTransition original)
-        : this(original.Label, new MutableState(original.Target)) { }
+        : this(original.Label, new MutableState(original.Target), original.Output) { }
 
-    public char Label { get; } = label;
+    public byte Label { get; } = label;
+    public int Output { get; set; } = output;
     public MutableState Target { get; set; } = target;
 
     IState ITransition.Target => Target;
@@ -69,7 +75,11 @@ public sealed class TransitionComparer : IComparer<ITransition>, IEqualityCompar
         if (result != 0)
             return result;
 
-        return StateComparer.Instance.Compare(x.Target, y.Target);
+        result = StateComparer.Instance.Compare(x.Target, y.Target);
+        if (result != 0)
+            return result;
+
+        return x.Output.CompareTo(y.Output);
     }
 
     public bool Equals(ITransition? x, ITransition? y) => Compare(x, y) == 0;
@@ -79,6 +89,7 @@ public sealed class TransitionComparer : IComparer<ITransition>, IEqualityCompar
         HashCode hashCode = new();
         hashCode.Add(transition.Label.GetHashCode());
         hashCode.Add(transition.Target.GetHashCode());
+        hashCode.Add(transition.Output.GetHashCode());
         return hashCode.ToHashCode();
     }
 }
